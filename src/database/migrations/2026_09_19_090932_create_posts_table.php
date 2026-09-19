@@ -11,14 +11,17 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('children', function (Blueprint $table) {
+        Schema::create('posts', function (Blueprint $table) {
             $table->id();
             $table->foreignId('user_id')->constrained()->cascadeOnDelete();
-            $table->string('name');
-            $table->date('birthday');
-            $table->tinyInteger('gender')->nullable();
-            $table->string('avatar_path')->nullable();
+            $table->foreignId('child_id')->constrained()->cascadeOnDelete();
+            $table->foreignId('feeding_record_id')->nullable()->unique()->constrained()->nullOnDelete();
+            $table->string('photo_path');
+            $table->text('caption')->nullable();
+            $table->dateTime('posted_at');
             $table->timestamps();
+
+            $table->index(['child_id', 'posted_at']);
         });
     }
 
@@ -27,6 +30,6 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::dropIfExists('children');
+        Schema::dropIfExists('posts');
     }
 };
