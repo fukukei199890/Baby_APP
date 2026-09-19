@@ -17,6 +17,7 @@
 - レシピの保存・食材との紐付け
 - 成長記録（体重・身長）のグラフ表示
 - リマインダー通知（そろそろ次の食材に挑戦など）
+- 離乳食の様子をInstagram風のフィード/グリッドで投稿・閲覧できる
 
 ---
 
@@ -35,6 +36,9 @@ erDiagram
     FOODS ||--o{ RECIPE_INGREDIENTS : "使用食材"
     USERS ||--o{ RECIPES : "作成者"
     CHILDREN ||--o{ REMINDERS : "リマインダー"
+    USERS ||--o{ POSTS : "投稿者"
+    CHILDREN ||--o{ POSTS : "投稿対象の子供"
+    FEEDING_RECORDS ||--o| POSTS : "紐づく投稿（任意）"
 ```
 
 ---
@@ -101,12 +105,12 @@ Laravel標準の`users`テーブルをベースに利用します。
 | reaction | enum(none, mild, severe) | アレルギー反応の有無 |
 | reaction_note | text (nullable) | 症状の詳細メモ |
 | amount | varchar (nullable) | 量（例：スプーン2杯） |
-| photo_path | varchar (nullable) | 食事の写真 |
 | memo | text (nullable) | 自由記述メモ |
 | created_at / updated_at | timestamp | |
 
 - `is_first_time` は保存時に「同じchild_id×food_idの記録が過去に存在するか」で自動判定するロジックをサービス層に持たせると良いです。
 - `child_id + food_id + fed_at` に複合インデックスを張っておくと検索が高速化します。
+- 写真は`posts`テーブルで一元管理するため、`photo_path`はここには持たせません（3.11参照）。
 
 ### 3.6 child_allergies（子供ごとのアレルギー情報）
 
@@ -163,6 +167,24 @@ feeding_recordsの`reaction`だけでも簡易記録は可能ですが、医師�
 | remind_at | datetime | 通知日時 |
 | is_sent | boolean | |
 
+### 3.11 posts（Instagram風の投稿）
+
+| カラム名 | 型 | 説明 |
+|---|---|---|
+| id | bigint (PK) | |
+| user_id | bigint (FK → users, cascadeOnDelete) | 投稿者（保護者） |
+| child_id | bigint (FK → children, cascadeOnDelete) | 投稿対象の子供 |
+| feeding_record_id | bigint (FK → feeding_records, nullable, unique, nullOnDelete) | 紐づく食事記録（任意） |
+| photo_path | varchar | 投稿写真 |
+| caption | text (nullable) | ひとこと |
+| posted_at | datetime | 投稿日時（フィード表示・並び替え用） |
+| created_at / updated_at | timestamp | |
+
+- `feeding_record_id`は任意。食事記録に紐づけずに「今日の一枚」のような投稿も可能。
+- `feeding_record_id`に`unique`制約を付け、1つの食事記録につき投稿は最大1件に制限（重複投稿の防止）。
+- 一覧・グリッド表示のため`(child_id, posted_at)`に複合インデックスを張る。
+- 写真の格納先は`posts`テーブルに一本化し、`feeding_records`側には持たせない（3.5参照）。
+
 ---
 
 ## 4. マイグレーション例（抜粋）
@@ -203,11 +225,24 @@ Schema::create('feeding_records', function (Blueprint $table) {
     $table->enum('reaction', ['none', 'mild', 'severe'])->default('none');
     $table->text('reaction_note')->nullable();
     $table->string('amount')->nullable();
-    $table->string('photo_path')->nullable();
     $table->text('memo')->nullable();
     $table->timestamps();
 
     $table->index(['child_id', 'food_id', 'fed_at']);
+});
+
+// database/migrations/xxxx_xx_xx_create_posts_table.php
+Schema::create('posts', function (Blueprint $table) {
+    $table->id();
+    $table->foreignId('user_id')->constrained()->cascadeOnDelete();
+    $table->foreignId('child_id')->constrained()->cascadeOnDelete();
+    $table->foreignId('feeding_record_id')->nullable()->unique()->constrained()->nullOnDelete();
+    $table->string('photo_path');
+    $table->text('caption')->nullable();
+    $table->dateTime('posted_at');
+    $table->timestamps();
+
+    $table->index(['child_id', 'posted_at']);
 });
 ```
 
@@ -239,6 +274,11 @@ class Child extends Model
         return $this->hasMany(ChildAllergy::class);
     }
 
+    public function posts(): HasMany
+    {
+        return $this->hasMany(Post::class);
+    }
+
     // 生年月日から月齢を計算するアクセサ
     public function getMonthAgeAttribute(): int
     {
@@ -262,6 +302,34 @@ class FeedingRecord extends Model
     public function food(): BelongsTo
     {
         return $this->belongsTo(Food::class);
+    }
+
+    public function post(): HasOne
+    {
+        return $this->hasOne(Post::class);
+    }
+}
+
+// app/Models/Post.php
+class Post extends Model
+{
+    protected $casts = [
+        'posted_at' => 'datetime',
+    ];
+
+    public function user(): BelongsTo
+    {
+        return $this->belongsTo(User::class);
+    }
+
+    public function child(): BelongsTo
+    {
+        return $this->belongsTo(Child::class);
+    }
+
+    public function feedingRecord(): BelongsTo
+    {
+        return $this->belongsTo(FeedingRecord::class);
     }
 }
 ```
@@ -304,10 +372,11 @@ class FeedingRecordObserver
 1. **基盤構築**：Laravel Breeze/Fortifyで認証を用意し、`users`と`children`のCRUDを実装
 2. **食材マスタ整備**：`food_categories`・`foods`テーブルとSeederを用意（月齢ガイドラインの初期データ投入）
 3. **記録機能**：`feeding_records`のCRUD、初回食材の自動判定ロジック
-4. **アレルギー管理**：`child_allergies`との連携、記録画面での警告表示（例：診断済みアレルギー食材を選ぼうとしたら警告）
-5. **成長記録・グラフ**：`growth_records`とChart.jsでの可視化
-6. **レシピ機能**：`recipes`/`recipe_ingredients`のCRUD、食材からレシピを逆引き検索
-7. **通知機能**：リマインダーのバッチ処理（Laravel Scheduler + Queue）
+4. **投稿機能（Instagram風）**：`posts`のCRUD、プロフィール画面でのグリッド一覧表示、`feeding_records`からの任意の紐付け
+5. **アレルギー管理**：`child_allergies`との連携、記録画面での警告表示（例：診断済みアレルギー食材を選ぼうとしたら警告）
+6. **成長記録・グラフ**：`growth_records`とChart.jsでの可視化
+7. **レシピ機能**：`recipes`/`recipe_ingredients`のCRUD、食材からレシピを逆引き検索
+8. **通知機能**：リマインダーのバッチ処理（Laravel Scheduler + Queue）
 
 ---
 
@@ -315,3 +384,4 @@ class FeedingRecordObserver
 
 - `feeding_records.reaction` はその場の記録用の簡易フィールドとして残し、確定診断は `child_allergies` に正規化して分離するのがおすすめです（アレルギー情報は誤って上書きされると危険なため、記録と診断を分けることで安全性を高められます）。
 - 複数の保護者（両親など）で同じ子供を共有管理したい場合は、`children`と`users`の関係を1対多から多対多（`child_user`中間テーブル）に変更する拡張が可能です。将来の要件として検討しておくとよいでしょう。
+- `posts.photo_path`を「写真の正」として一本化しているのは、同じ食事の写真が`feeding_records`と`posts`の2箇所に分散して矛盾するのを防ぐためです。`feeding_record_id`は`nullable`かつ`unique`にすることで、「食事記録に紐づく投稿」と「食事と関係ない投稿」の両方を許容しつつ、1つの食事記録につき投稿が重複しないようにしています。
