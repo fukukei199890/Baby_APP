@@ -11,6 +11,16 @@ class Post extends Model
         'posted_at' => 'datetime',
     ];
 
+    protected $fillable = [
+        'user_id',
+        'child_id',
+        'feeding_record_id',
+        'photo_path',
+        'caption',
+        'posted_at',
+    ];
+
+
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
