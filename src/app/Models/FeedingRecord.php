@@ -13,6 +13,15 @@ class FeedingRecord extends Model
         'is_first_time' => 'boolean',
     ];
 
+    protected $fillable = [
+        'child_id',
+        'food_name',
+        'fed_at',
+        'meal_time',
+        'amount',
+        'memo',
+    ];
+
     public function child(): BelongsTo
     {
         return $this->belongsTo(Child::class);

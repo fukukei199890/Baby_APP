@@ -2,8 +2,10 @@
 
 namespace App\Http\Controllers;
 
+use App\Actions\CreatePostWithFeedingRecord;
+use App\Http\Requests\StorePostRequest;
 use App\Models\Post;
-use App\Models\Child;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\View\View;
 
 class PostController extends Controller
@@ -23,41 +25,35 @@ class PostController extends Controller
         ]);
     }
 
-
     /**
      * 投稿フォームを表示する。
      */
-    public function create(): View
+    public function create(): View|RedirectResponse
     {
-        // フォームの「子供」選択肢は、自分（ログインユーザー）の children だけに絞る
-        // → 他人の子供を選べてしまう抜け道を防ぐ
-        $children = Child::where('user_id', auth()->id())->get();
+        // MVPでは1ユーザー1子供の前提なので、フォームには子供選択を出さず自動で解決する
+        if (! auth()->user()->children()->exists()) {
+            return redirect()->route('posts.index')
+                ->with('status', __('先に子供を登録してください'));
+        }
 
-        return view('posts.create', ['children' => $children]);
+        return view('posts.create');
     }
 
     /**
      * 投稿を保存する。
+     * feeding_record と post を同時に作成する処理は Action クラスに委譲する。
      */
-    public function store(StorePostRequest $request): RedirectResponse
+    public function store(StorePostRequest $request, CreatePostWithFeedingRecord $action): RedirectResponse
     {
-        // Post::create 単体ではモデルクラスに対する認可なので、
-        // PostPolicy::create() が呼ばれる（今回は「ログイン済みなら誰でもOK」の実装）
         $this->authorize('create', Post::class);
+
+        $child = auth()->user()->children()->firstOrFail();
 
         // アップロードされた画像ファイルを storage/app/public/posts に保存し、
         // DBに保存すべき相対パス（例: posts/xxxxx.jpg）を受け取る
         $path = $request->file('photo')->store('posts', 'public');
 
-        Post::create([
-            // バリデーション済みの値（child_id, caption, posted_at, feeding_record_id）を展開
-            // ※ 'photo' というキーは validated() に含まれるが $fillable に無いので無視される
-            ...$request->validated(),
-
-            // フォームには含まれない値はここで明示的に補う
-            'user_id' => auth()->id(),
-            'photo_path' => $path,
-        ]);
+        $action->handle($request->validated(), $child, auth()->id(), $path);
 
         // 投稿一覧に戻り、フラッシュメッセージで完了を伝える
         return redirect()->route('posts.index')->with('status', __('投稿しました'));

@@ -3,14 +3,12 @@
 namespace App\Http\Requests;
 
 use Illuminate\Foundation\Http\FormRequest;
-use Illuminate\Validation\Rule;
 
 class StorePostRequest extends FormRequest
 {
     /**
      * このリクエストの実行を許可するか。
-     * 「投稿できるかどうか」自体はログイン済みなら誰でもOKなのでtrue。
-     * 「他人の子供に投稿できないか」はバリデーション側（rules）でチェックする。
+     * ログイン済みなら誰でも投稿できるのでtrue。
      */
     public function authorize(): bool
     {
@@ -18,33 +16,30 @@ class StorePostRequest extends FormRequest
     }
 
     /**
-     * バリデーションルール
+     * バリデーションルール。
+     * この投稿フォームは posts と feeding_records を同時に作成するため、
+     * 両テーブル分の項目が混在している。
      */
     public function rules(): array
     {
         return [
-            // 自分（ログインユーザー）が持っている children の中からのみ選べるようにする
-            'child_id' => [
-                'required',
-                Rule::exists('children', 'id')->where('user_id', $this->user()->id),
-            ],
-
             // アップロードされたファイル本体をチェック（保存先カラム名の photo_path ではない点に注意）
             'photo' => ['required', 'image', 'max:5120'], // 5MBまで
 
-            // 投稿の一言コメントは任意
+            // 今日作ったもの（材料も含めて自由入力） → feeding_records.food_name
+            'food_name' => ['required', 'string', 'max:255'],
+
+            // 食事のタイミング → feeding_records.meal_time（DB側がnullable不可のenumのため必須）
+            'meal_time' => ['required', 'in:morning,noon,evening,snack'],
+
+            // どれくらい食べたか（任意） → feeding_records.amount
+            'amount' => ['nullable', 'string', 'max:255'],
+
+            // 投稿の一言コメント（任意） → posts.caption
             'caption' => ['nullable', 'string', 'max:1000'],
 
-            // 投稿日時は必須（フィード表示の並び替えに使う）
+            // 投稿日時（必須） → posts.posted_at、日付部分は feeding_records.fed_at にも使う
             'posted_at' => ['required', 'date'],
-
-            // feeding_record は任意の紐付け。
-            // exists: そのレコードが実在するか / unique: 1つの記録につき投稿1件までのDB制約と同じ条件を事前チェック
-            'feeding_record_id' => [
-                'nullable',
-                'exists:feeding_records,id',
-                'unique:posts,feeding_record_id',
-            ],
         ];
     }
 }

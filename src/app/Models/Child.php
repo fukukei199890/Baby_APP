@@ -12,6 +12,14 @@ class Child extends Model
         'birthday' => 'date',
     ];
 
+    protected $fillable = [
+        'user_id',
+        'name',
+        'birthday',
+        'gender',
+        'avatar_path',
+    ];
+
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
