@@ -21,6 +21,7 @@ class CreatePostWithFeedingRecord
             $feedingRecord = FeedingRecord::create([
                 'child_id' => $child->id,
                 'food_name' => $data['food_name'],
+                'ingredients' => $date['ingredients'] ?? null,
                 'fed_at' => $data['posted_at'],
                 'meal_time' => $data['meal_time'],
                 'amount' => $data['amount'] ?? null,

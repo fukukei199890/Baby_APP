@@ -13,9 +13,26 @@
         @csrf
     </form>
 
-    <form method="post" action="{{ route('profile.update') }}" class="mt-6 space-y-6">
+    <form method="post" action="{{ route('profile.update') }}" enctype="multipart/form-data" class="mt-6 space-y-6">
         @csrf
         @method('patch')
+
+        <div>
+            <x-input-label for="avatar" :value="__('Avatar')" />
+            <div class="flex items-center gap-4 mt-1">
+                @if ($user->avatar_path)
+                    <img src="{{ Storage::disk('public')->url($user->avatar_path) }}"
+                         alt="{{ $user->name }}"
+                         class="w-16 h-16 rounded-full object-cover">
+                @else
+                    <div class="w-16 h-16 rounded-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center text-lg font-semibold text-gray-600 dark:text-gray-300">
+                        {{ mb_substr($user->name, 0, 1) }}
+                    </div>
+                @endif
+                <input type="file" name="avatar" id="avatar" class="block w-full text-sm">
+            </div>
+            <x-input-error class="mt-2" :messages="$errors->get('avatar')" />
+        </div>
 
         <div>
             <x-input-label for="name" :value="__('Name')" />

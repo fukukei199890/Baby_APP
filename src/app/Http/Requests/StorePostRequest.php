@@ -40,6 +40,10 @@ class StorePostRequest extends FormRequest
 
             // 投稿日時（必須） → posts.posted_at、日付部分は feeding_records.fed_at にも使う
             'posted_at' => ['required', 'date'],
+
+            // 使った材料（任意・自由記述） → feeding_records.ingredients
+            'ingredients' => ['nullable', 'string'],
+
         ];
     }
 }
