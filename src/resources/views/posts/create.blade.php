@@ -23,6 +23,16 @@
                 </div>
 
                 <div>
+                    <label for="ingredients" class="block text-sm font-medium text-gray-700 dark:text-gray-300">{{ __('材料') }}</label>
+                    <textarea name="ingredients" id="ingredients" rows="2"
+                              placeholder="{{ __('例：にんじん、じゃがいも、鶏肉') }}"
+                              class="mt-1 block w-full rounded-md">{{ old('ingredients') }}</textarea>
+                    @error('ingredients')
+                        <p class="text-sm text-red-600 mt-1">{{ $message }}</p>
+                    @enderror
+                </div>
+
+                <div>
                     <label for="meal_time" class="block text-sm font-medium text-gray-700 dark:text-gray-300">{{ __('食事のタイミング') }}</label>
                     <select name="meal_time" id="meal_time" class="mt-1 block w-full rounded-md">
                         @php

@@ -12,15 +12,16 @@ class FeedingRecord extends Model
         'fed_at' => 'date',
         'is_first_time' => 'boolean',
     ];
-
     protected $fillable = [
         'child_id',
         'food_name',
+        'ingredients',
         'fed_at',
         'meal_time',
         'amount',
         'memo',
     ];
+
 
     public function child(): BelongsTo
     {

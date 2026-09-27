@@ -12,17 +12,14 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('feeding_records', function (Blueprint $table) {
-            //
+            $table->text('ingredients')->nullable()->after('food_name');
         });
     }
 
-    /**
-     * Reverse the migrations.
-     */
     public function down(): void
     {
         Schema::table('feeding_records', function (Blueprint $table) {
-            //
+            $table->dropColumn('ingredients');
         });
     }
 };
